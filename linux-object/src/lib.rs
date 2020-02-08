@@ -3,7 +3,9 @@
 #![no_std]
 #![deny(warnings, unsafe_code, missing_docs)]
 #![feature(bool_to_option)]
+#![feature(untagged_unions)]
 
+#[macro_use]
 extern crate alloc;
 
 #[macro_use]
@@ -14,6 +16,7 @@ pub mod error;
 
 // layer 1
 pub mod fs;
+pub mod net;
 
 // layer 2
 pub mod ipc;
