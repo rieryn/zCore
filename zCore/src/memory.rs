@@ -30,9 +30,23 @@ use riscv::paging::PageTable;
 
 static FRAME_ALLOCATOR: Mutex<FrameAlloc> = Mutex::new(FrameAlloc::DEFAULT);
 
+#[cfg(target_arch = "x86_64")]
 const MEMORY_OFFSET: usize = 0;
+#[cfg(target_arch = "x86_64")]
 const KERNEL_OFFSET: usize = 0xffffff00_00000000;
+#[cfg(target_arch = "x86_64")]
 const PHYSICAL_MEMORY_OFFSET: usize = 0xffff8000_00000000;
+
+#[cfg(target_arch = "riscv64")]
+const MEMORY_OFFSET: usize = 0x8000_0000;
+#[cfg(target_arch = "riscv64")]
+const KERNEL_OFFSET: usize = 0xFFFF_FFFF_C000_0000;
+#[cfg(target_arch = "riscv64")]
+const PHYSICAL_MEMORY_OFFSET: usize = 0xFFFF_FFFF_4000_0000;
+// TODO: get memory end from device tree
+#[cfg(target_arch = "riscv64")]
+pub const MEMORY_END: usize = 0x8800_0000;
+
 const KERNEL_HEAP_SIZE: usize = 16 * 1024 * 1024; // 16 MB
 
 const KERNEL_PM4: usize = (KERNEL_OFFSET >> 39) & 0o777;
@@ -57,9 +71,53 @@ pub fn init_frame_allocator(boot_info: &BootInfo) {
     info!("Frame allocator init end");
 }
 
+// Symbols provided by linker script
+#[cfg(target_arch = "riscv64")]
+#[allow(dead_code)]
+extern "C" {
+    fn stext();
+    fn etext();
+    fn sdata();
+    fn edata();
+    fn srodata();
+    fn erodata();
+    fn sbss();
+    fn ebss();
+    fn start();
+    fn end();
+    fn bootstack();
+    fn bootstacktop();
+}
+
 #[cfg(target_arch = "riscv64")]
 pub fn init_frame_allocator() {
-    unimplemented!()
+    use core::ops::Range;
+
+    let mut ba = FRAME_ALLOCATOR.lock();
+    let range = to_range(
+        (end as usize) - KERNEL_OFFSET + MEMORY_OFFSET + PAGE_SIZE,
+        MEMORY_END,
+    );
+    ba.insert(range);
+
+    info!("frame allocator: init end");
+
+    /// Transform memory area `[start, end)` to integer range for `FrameAllocator`
+    fn to_range(start: usize, end: usize) -> Range<usize> {
+        let page_start = (start - MEMORY_OFFSET) / PAGE_SIZE;
+        let page_end = (end - MEMORY_OFFSET - 1) / PAGE_SIZE + 1;
+        assert!(page_start < page_end, "illegal range for frame allocator");
+        page_start..page_end
+    }
+}
+
+pub unsafe fn clear_bss() {
+    let start = sbss as usize;
+    let end = ebss as usize;
+    let step = core::mem::size_of::<usize>();
+    for i in (start..end).step_by(step) {
+        (i as *mut usize).write(0);
+    }
 }
 
 pub fn init_heap() {

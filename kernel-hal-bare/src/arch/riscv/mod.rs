@@ -10,19 +10,21 @@ use riscv;
 
 mod io;
 pub mod sbi;
+pub mod timer;
 
 pub use io::*;
 
 #[export_name = "hal_timer_now"]
 pub fn timer_now() -> Duration {
-    Duration::from_nanos(0)
+    timer::timer_now()
 }
 
 pub struct Config {
+    pub dtb: usize,
 }
 
 pub fn init(_config: Config) {
-    unimplemented!();
+    timer::init();
 }
 
 pub unsafe fn set_page_table(_vmtoken: usize) {

@@ -135,7 +135,7 @@ impl Frame {
     }
 }
 
-fn phys_to_virt(paddr: PhysAddr) -> VirtAddr {
+pub fn phys_to_virt(paddr: PhysAddr) -> VirtAddr {
     unsafe { PMEM_BASE + paddr }
 }
 

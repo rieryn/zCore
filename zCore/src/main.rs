@@ -123,7 +123,21 @@ global_asm!(include_str!("arch/riscv/boot/entry64.asm"));
 
 #[cfg(target_arch = "riscv64")]
 #[no_mangle]
-pub extern "C" fn rust_main() -> ! {
-    kernel_hal_bare::arch::serial_write("hello");
+pub extern "C" fn rust_main(hartid: usize, device_tree_paddr: usize) -> ! {
+    logging::init("info");
+    unsafe {
+        memory::clear_bss();
+    }
+    memory::init_heap();
+    memory::init_frame_allocator();
+    let device_tree_vaddr = kernel_hal_bare::phys_to_virt(device_tree_paddr);
+    info!(
+        "Hello RISCV! in hart {}, device tree @ {:#x}",
+        hartid, device_tree_vaddr
+    );
+    kernel_hal_bare::init(kernel_hal_bare::Config {
+        dtb: device_tree_vaddr,
+    });
+    info!("rust main end");
     loop {}
 }
