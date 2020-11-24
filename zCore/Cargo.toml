@@ -19,8 +19,7 @@ lto = true
 log = "0.4"
 spin = "0.5"
 buddy_system_allocator = "0.5.0"
-rlibc-opt = { git = "https://github.com/rcore-os/rlibc-opt.git", rev = "0ab1d1e" }
-rboot = { path = "../rboot", default-features = false }
+rlibc = "1.0"
 kernel-hal-bare = { path = "../kernel-hal-bare" }
 lazy_static = { version = "1.4", features = ["spin_no_std" ] }
 bitmap-allocator = { git = "https://github.com/rcore-os/bitmap-allocator", rev = "03bd9909" }
@@ -36,3 +35,9 @@ rvm = { git = "https://github.com/rcore-os/RVM", rev = "e91d625", optional = tru
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 x86_64 = "0.12"
+rboot = { path = "../rboot", default-features = false }
+rlibc-opt = { git = "https://github.com/rcore-os/rlibc-opt.git", rev = "0ab1d1e" }
+
+[target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]
+riscv = { git = "https://github.com/rcore-os/riscv", features = ["inline-asm"], rev = "21e32ee" }
+

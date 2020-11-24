@@ -495,3 +495,8 @@ fn cacheline_size() -> usize {
     let leaf = unsafe { __cpuid(1).ebx };
     (((leaf >> 8) & 0xff) << 3) as usize
 }
+
+pub fn wait_for_interrupt() {
+    x86_64::instructions::interrupts::enable_interrupts_and_hlt();
+    x86_64::instructions::interrupts::disable();
+}

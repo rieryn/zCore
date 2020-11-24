@@ -9,16 +9,26 @@ hypervisor ?=
 smp ?= 1
 test_filter ?= *.*
 
-build_args := -Z build-std=core,alloc --target $(arch).json
-build_path := target/$(arch)/$(mode)
+target := $(arch)
+build_args := -Z build-std=core,alloc --target $(target).json
+
+ifeq ($(arch), riscv64)
+target := riscv64imac-unknown-none-elf
+build_args := -Z build-std=core,alloc --target $(target)
+endif
+
+
+build_path := target/$(target)/$(mode)
 kernel := $(build_path)/zcore
 kernel_img := $(build_path)/zcore.img
 ESP := $(build_path)/esp
 OVMF := ../rboot/OVMF.fd
-qemu := qemu-system-x86_64
-OBJDUMP := rust-objdump -print-imm-hex -x86-asm-syntax=intel
+qemu := qemu-system-${arch}
+OBJDUMP := rust-objdump
 VMDISK := $(build_path)/boot.vdi
 QEMU_DISK := $(build_path)/disk.qcow2
+
+OBJCOPY := rust-objcopy --binary-architecture=${arch}
 
 ifeq ($(mode), release)
 	build_args += --release
@@ -46,6 +56,14 @@ qemu_opts += \
 	-m 4G \
 	-nic none \
 	-device isa-debug-exit,iobase=0xf4,iosize=0x04
+endif
+
+ifeq ($(arch), riscv64)
+qemu_opts += \
+	-machine virt \
+	-bios default \
+	-device loader,file=$(kernel_img),addr=0x80200000 \
+	-serial mon:stdio
 endif
 
 ifeq ($(hypervisor), 1)
@@ -94,6 +112,7 @@ build-parallel-test: build $(QEMU_DISK)
 	echo 'cmdline=LOG=warn:userboot=test/core-standalone-test:userboot.shutdown:core-tests=$(test_filter)' >> $(ESP)/EFI/Boot/rboot.conf
 
 $(kernel_img): kernel bootloader
+ifeq ($(arch), x86_64)
 	mkdir -p $(ESP)/EFI/zCore $(ESP)/EFI/Boot
 	cp ../rboot/target/x86_64-unknown-uefi/release/rboot.efi $(ESP)/EFI/Boot/BootX64.efi
 	cp rboot.conf $(ESP)/EFI/Boot/rboot.conf
@@ -107,12 +126,18 @@ else
 endif
 	cp $(kernel) $(ESP)/EFI/zCore/zcore.elf
 
+else ifeq ($(arch), riscv64)
+	@$(OBJCOPY) $(kernel) --strip-all -O binary $(build_path)/zcore.img
+endif
+
 kernel:
-	echo Building zCore kenel
-	cargo build $(build_args)
+	@echo Building zCore kenel
+	@cargo build $(build_args)
 
 bootloader:
+ifeq ($(arch), x86_64)
 	cd ../rboot && make build
+endif
 
 clean:
 	cargo clean

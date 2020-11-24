@@ -4,13 +4,29 @@
 use {
     bitmap_allocator::BitAlloc,
     buddy_system_allocator::LockedHeap,
-    rboot::{BootInfo, MemoryType},
     spin::Mutex,
-    x86_64::structures::paging::page_table::{PageTable, PageTableFlags as EF},
 };
 
 #[cfg(target_arch = "x86_64")]
 type FrameAlloc = bitmap_allocator::BitAlloc16M;
+
+#[cfg(target_arch = "x86_64")]
+use rboot::{BootInfo, MemoryType};
+
+// RISCV, ARM, MIPS has 1G memory
+#[cfg(any(
+    target_arch = "riscv32",
+    target_arch = "riscv64",
+    target_arch = "aarch64",
+    target_arch = "mips"
+))]
+type FrameAlloc = bitmap_allocator::BitAlloc1M;
+
+#[cfg(target_arch = "x86_64")]
+use x86_64::structures::paging::page_table::{PageTable, PageTableFlags as EF};
+
+#[cfg(target_arch = "riscv64")]
+use riscv::paging::PageTable;
 
 static FRAME_ALLOCATOR: Mutex<FrameAlloc> = Mutex::new(FrameAlloc::DEFAULT);
 
@@ -28,6 +44,7 @@ const PAGE_SIZE: usize = 1 << 12;
 #[export_name = "hal_pmem_base"]
 static PMEM_BASE: usize = PHYSICAL_MEMORY_OFFSET;
 
+#[cfg(target_arch = "x86_64")]
 pub fn init_frame_allocator(boot_info: &BootInfo) {
     let mut ba = FRAME_ALLOCATOR.lock();
     for region in boot_info.memory_map.iter() {
@@ -38,6 +55,11 @@ pub fn init_frame_allocator(boot_info: &BootInfo) {
         }
     }
     info!("Frame allocator init end");
+}
+
+#[cfg(target_arch = "riscv64")]
+pub fn init_frame_allocator() {
+    unimplemented!()
 }
 
 pub fn init_heap() {
@@ -87,12 +109,19 @@ pub extern "C" fn hal_frame_dealloc(target: &usize) {
         .dealloc((*target - MEMORY_OFFSET) / PAGE_SIZE);
 }
 
+#[cfg(target_arch = "x86_64")]
 #[no_mangle]
 pub extern "C" fn hal_pt_map_kernel(pt: &mut PageTable, current: &PageTable) {
     let ekernel = current[KERNEL_PM4].clone();
     let ephysical = current[PHYSICAL_MEMORY_PM4].clone();
     pt[KERNEL_PM4].set_addr(ekernel.addr(), ekernel.flags() | EF::GLOBAL);
     pt[PHYSICAL_MEMORY_PM4].set_addr(ephysical.addr(), ephysical.flags() | EF::GLOBAL);
+}
+
+#[cfg(target_arch = "riscv64")]
+#[no_mangle]
+pub extern "C" fn hal_pt_map_kernel(_pt: &mut PageTable, _current: &PageTable) {
+    unimplemented!()
 }
 
 #[cfg(feature = "hypervisor")]

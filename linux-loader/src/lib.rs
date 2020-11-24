@@ -9,17 +9,23 @@ extern crate alloc;
 #[macro_use]
 extern crate log;
 
+#[cfg(target_arch = "x86_64")]
+use kernel_hal::{GeneralRegs, MMUFlags};
+
+// #[cfg(target_arch = "riscv64")]
+// use kernel_hal::UserContext;
+
+
 use {
     alloc::{boxed::Box, string::String, sync::Arc, vec::Vec},
     core::{future::Future, pin::Pin},
-    kernel_hal::{GeneralRegs, MMUFlags},
     linux_object::{
         fs::{vfs::FileSystem, INodeExt},
         loader::LinuxElfLoader,
         process::ProcessExt,
         thread::ThreadExt,
     },
-    linux_syscall::Syscall,
+    // linux_syscall::Syscall,
     zircon_object::task::*,
 };
 
@@ -67,6 +73,7 @@ async fn new_thread(thread: CurrentThread) {
         kernel_hal::context_run(&mut cx);
         trace!("back from user: {:#x?}", cx);
         // handle trap/interrupt/syscall
+        #[cfg(target_arch = "x86_64")]
         match cx.trap_num {
             0x100 => handle_syscall(&thread, &mut cx.general).await,
             0x20..=0x3f => {
@@ -93,6 +100,9 @@ async fn new_thread(thread: CurrentThread) {
             }
             _ => panic!("not supported interrupt from user mode. {:#x?}", cx),
         }
+        #[cfg(target_arch = "riscv64")]
+        unimplemented!();
+        #[cfg(target_arch = "x86_64")]
         thread.end_running(cx);
     }
 }
@@ -102,10 +112,16 @@ fn thread_fn(thread: CurrentThread) -> Pin<Box<dyn Future<Output = ()> + Send + 
 }
 
 /// syscall handler entry
-async fn handle_syscall(thread: &CurrentThread, regs: &mut GeneralRegs) {
-    trace!("syscall: {:#x?}", regs);
-    let num = regs.rax as u32;
-    let args = [regs.rdi, regs.rsi, regs.rdx, regs.r10, regs.r8, regs.r9];
+#[cfg(target_arch = "x86_64")]
+async fn handle_syscall(thread: &CurrentThread, context: &mut UserContext) {
+    trace!("syscall: {:#x?}", context);
+    let num = context.get_syscall_num();
+    let args = context.get_syscall_args();
+    let regs = &mut context.general;
+    #[cfg(target_arch = "riscv64")]
+    {
+        context.sepc = context.sepc + 4;
+    }
     let mut syscall = Syscall {
         thread,
         #[cfg(feature = "std")]
@@ -115,5 +131,6 @@ async fn handle_syscall(thread: &CurrentThread, regs: &mut GeneralRegs) {
         thread_fn,
         regs,
     };
-    regs.rax = syscall.syscall(num, args).await as usize;
+    let ret = syscall.syscall(num as u32, args).await;
+    context.set_syscall_ret(ret as usize);
 }

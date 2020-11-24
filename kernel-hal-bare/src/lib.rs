@@ -16,7 +16,8 @@
 #![no_std]
 #![feature(asm)]
 #![feature(linkage)]
-#![deny(warnings)]
+// #![deny(warnings)]
+#![feature(llvm_asm)]
 
 #[macro_use]
 extern crate log;
@@ -34,6 +35,7 @@ use core::{
     task::{Context, Poll},
 };
 use kernel_hal::defs::*;
+#[cfg(target_arch = "x86_64")]
 use kernel_hal::vdso::*;
 use kernel_hal::UserContext;
 use naive_timer::Timer;

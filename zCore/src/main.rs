@@ -4,11 +4,14 @@
 #![feature(asm)]
 #![feature(panic_info_message)]
 #![deny(unused_must_use)]
-#![deny(warnings)] // comment this on develop
+#![feature(global_asm)]
+// #![deny(warnings)] // comment this on develop
 
 extern crate alloc;
 #[macro_use]
 extern crate log;
+
+#[cfg(target_arch = "x86_64")]
 extern crate rlibc_opt;
 
 #[macro_use]
@@ -16,10 +19,13 @@ mod logging;
 mod lang;
 mod memory;
 
+#[cfg(target_arch = "x86_64")]
 use rboot::BootInfo;
 
-pub use memory::{hal_frame_alloc, hal_frame_dealloc, hal_pt_map_kernel};
+// pub use memory::{hal_frame_alloc, hal_frame_dealloc, hal_pt_map_kernel};
 
+
+#[cfg(target_arch = "x86_64")]
 #[no_mangle]
 pub extern "C" fn _start(boot_info: &BootInfo) -> ! {
     logging::init(get_log_level(boot_info.cmdline));
@@ -88,8 +94,7 @@ fn main(ramfs_data: &'static mut [u8], _cmdline: &str) {
 fn run() -> ! {
     loop {
         executor::run_until_idle();
-        x86_64::instructions::interrupts::enable_interrupts_and_hlt();
-        x86_64::instructions::interrupts::disable();
+        kernel_hal_bare::wait_for_interrupt();
     }
 }
 
@@ -111,4 +116,14 @@ fn init_framebuffer(boot_info: &BootInfo) {
     let (width, height) = boot_info.graphic_info.mode.resolution();
     let fb_addr = boot_info.graphic_info.fb_addr as usize;
     kernel_hal_bare::init_framebuffer(width as u32, height as u32, fb_addr);
+}
+
+#[cfg(target_arch = "riscv64")]
+global_asm!(include_str!("arch/riscv/boot/entry64.asm"));
+
+#[cfg(target_arch = "riscv64")]
+#[no_mangle]
+pub extern "C" fn rust_main() -> ! {
+    kernel_hal_bare::arch::serial_write("hello");
+    loop {}
 }
